@@ -12,6 +12,10 @@ library(dplyr)
 library(forecast)
 library(seasonal)
 library(tsibble)
+library(urca)
+library(uroot)
+library(gridExtra)
+library(Metrics)
 
 
 ##install.packages("forecast",dependency=TRUE)
@@ -212,14 +216,373 @@ des_new_deaths<-decompose(ts_newdeaths)
 
 plot(des_new_deaths)
 
+# Analsis de la estacionariedad serie de tiempo a niveles I(0):
+#1. Funciones de autocorrelación simple.
+
+Acf(ts_newdeaths, lag.max=50, plot = F) %>% 
+  autoplot()+
+  labs(title= 'Funcion de correlación simple',
+       subtitle = 'Serie de tiempo fallecimientos semanales por Covid-19 en México a niveles I(0)',
+       y=expression(rho),
+       x='k')+
+  scale_x_continuous(breaks = seq(0,50,1))
+#1.1 Funciones de autocorrelación parcial
+
+Pacf(ts_newdeaths, lag.max=156, plot = F) %>% 
+  autoplot()+
+  labs(title= 'Funcion de correlación parcial',
+       subtitle = 'Serie de tiempo fallecimientos semanales por Covid-19 en México a niveles I(0)',
+       y=expression(rho),
+       x='k')+
+  scale_x_continuous(breaks = seq(0,156,52))
+  
+#2. Prueba de Dickey-Fuller Aumentada.
+
+adf.test(ts_newdeaths)
+
+# Dado que el estadistico Dickey-Fuller Aumentada proporcionó un p-value=0.2317 
+# y en contraste con un valor de significancia alpha=0.05, no existe evidencia 
+# suficiente para rechazar la hipostesis Ho de no estacionariedad.
 
 
-############## Seasonal ##########
+
+#3. Prueba de Phillips-Perron.
+pp.test(ts_newdeaths)
+
+# Dado que el estadistico Phillips-Perron proporcionó un p-value=0.5503 
+# y en contraste con un valor de significancia alpha=0.05, no existe evidencia 
+# suficiente para rechazar la hipostesis Ho de no estacionariedad.
+
+
+#4. Prueba de KPSS.
+
+kpss.test(ts_newdeaths, null = "Trend")
+# Dado que el estadistico KPSS proporcionó un p-value=0.01
+# y en contraste con un valor de significancia alpha=0.05, existe evidencia 
+# suficiente para rechazar la hipostesis Ho de estacionariedad.
+
+  
+# Considerando los estadisitcos Dickey-Fuller Aumentada,Phillips-Perron y KPSS
+# se confirma la no estacionariedad de la serie de tiempo, porque para cumplir
+# con el supuesto de ruido blanco y varianza cte, se procede a realizar la 1ra
+# diferencia de la serie de tiempo, para posterior volver a verificar la 
+# estacionariedad de la serie de tiempo en primera diferecia I(1)
+
+ts_dif_newdeaths <- diff(ts_newdeaths)
+
+dif_newdeaths <- data.frame(date=covid_week$date[2:nrow(covid_week)],
+                            ts_dif_newdeaths)
+
+ggplot(data=dif_newdeaths, aes(x=date, y=ts_dif_newdeaths))+
+  geom_line(colour="black")+
+  scale_x_date(date_breaks = "6 month",
+               date_labels = " %m-%Y")+
+  scale_y_continuous(breaks = seq(min(covid_week$new_deaths),
+                                  max(covid_week$new_deaths),(1000)))+
+  theme_minimal()+
+  labs(title="Nuevos fallecimentos semanales por COVID-19 del 2020 al 2022 en Mexico",
+       subtitle = "Serie de tiempo con primera diferencia I(1)",
+       caption = "Elaboración propia con con datos de Our World in Data COVID-19",
+       x="Fecha",
+       y="Número de fallecimientos")
+
+
+# Analsis de la estacionariedad serie de tiempo en primer diferencia I(1):
+#1. Funciones de autocorrelación simple.
+
+Acf(ts_dif_newdeaths, lag.max=50, plot = F) %>% 
+  autoplot()+
+  labs(title= 'Funcion de correlación simple',
+       subtitle = 'Serie de tiempo fallecimientos semanales por Covid-19 en México a niveles I(0)',
+       y=expression(rho),
+       x='k')+
+  scale_x_continuous(breaks = seq(0,50,1))
+
+# Se sospecha de estacionariedad ya que existe un caida exponencial en los  
+# primeros retardos. Sin embargo, es necesario aplicar las pruebas de estacio-
+# nariedad KPSS, DF y PP 
+
+#1.1 Funciones de autocorrelación parcial
+
+Pacf(ts_dif_newdeaths, lag.max=156, plot = F) %>% 
+  autoplot()+
+  labs(title= 'Funcion de correlación parcial',
+       subtitle = 'Serie de tiempo fallecimientos semanales por Covid-19 en México a niveles I(0)',
+       y=expression(rho),
+       x='k')+
+  scale_x_continuous(breaks = seq(0,156,52))
+
+# Se sospecha de estacionalidad ya que existe una concordancia en el signo de
+# rho para los retardos 1,52 y 104. Sin embargo, es necesario aplicar la 
+# prueba de DF estacional 
+
+#2. Prueba de Dickey-Fuller Aumentada.
+
+adf.test(ts_dif_newdeaths)
+
+# Dado que el estadistico Dickey-Fuller Aumentada proporcionó un p-value=0.01 
+# y en contraste con un valor de significancia alpha=0.05, existe evidencia 
+# suficiente para rechazar la hipostesis Ho de no estacionariedad.
+
+
+#3. Prueba de Phillips-Perron.
+pp.test(ts_dif_newdeaths)
+
+# Dado que el estadistico Phillips-Perron proporcionó un p-value=0.01 
+# y en contraste con un valor de significancia alpha=0.05, existe evidencia 
+# suficiente para rechazar la hipostesis Ho de no estacionariedad.
+
+
+#4. Prueba de KPSS.
+
+kpss.test(ts_dif_newdeaths, null = "Level")
+# Dado que el estadistico KPSS proporcionó un p-value=0.1
+# y en contraste con un valor de significancia alpha=0.05,no existe evidencia 
+# suficiente para rechazar la hipostesis Ho de estacionariedad.
+
+# Considerando los estadisitcos Dickey-Fuller Aumentada,Phillips-Perron y KPSS
+# se confirma la estacionariedad de la serie de tiempo en primera diferencia,
+# es decir, que la serie de tiempo posee media igual con cero y varianza cte.
+# Por lo tanto, se procede a realizar un analisis de la estacionalidad de la 
+# serie de tiempo en diferencia I(1), para posterior tomar una desición sobre
+# el modelado basado en ARIMA o SARIMA segun sea el caso.
+
+
+############## Estacionalidad ##########
 
 ggseasonplot(ts_newdeaths, year.labels = TRUE,
              year.labels.left = TRUE,
-             main='Analisis de estacionalidad nuevos fallecimientos COVID-19 en México \nElaboración propia con datos de Our World in Data COVID-19')
-              
+             main='Analisis de estacionalidad nuevos fallecimientos COVID-19 
+             en México \nElaboración propia con datos de Our World in 
+             Data COVID-19')
+ggseasonplot(ts_dif_newdeaths, year.labels = TRUE,
+             year.labels.left = TRUE,
+             main='Analisis de estacionalidad nuevos fallecimientos COVID-19 
+             en México \nElaboración propia con datos de Our World in 
+             Data COVID-19')
+
+
+#En el grafico se aprecia que el año 2020 no tiene la misma temporalidad 
+#respecto a los años 2021 y 2022, por otra parte, el año 2022, parece seguir la
+#misma tendencia que el año 2021 para los primeros meses de años. Sin embargo,
+#antes de confirmar la estacionalidad en la serie de tiempo, es necesario 
+#aplicar la prueba Dickey-Fuller estacional.
+
+## Prueba DF estacional 
+
+covid_s <- diff(ts_newdeaths,52)
+
+## diff() -> Obtiene la diferencia de una serie
+## diff(x,1) -> Y_t - Y_{t-1}
+## diff(x,4) -> Y_t - Y_{t-4}
+
+covid_t4 <- stats::lag(ts_newdeaths,-52)
+
+## stats::lag() obtiene el rezago de la serie 
+## stats::lag(x,-1) -> Y_{t-1}
+## stats::lag(x,-4) -> Y_{t-4}
+
+#Para Dickey-Fuller estacional
+#H0= estacional
+#Ha= no estacional
+DFS <- lm(covid_s~covid_t4[1:74])
+summary(DFS)
+#Dado que el p-valor del phi estimado es 2x10^-16 y constrastado con un valor
+#de significia del 0.05, existe evidencia suficiente para rechazar H0, es decir
+#que el valor de phi es != 0. y por lo tanto no hay precencia de raiz no 
+#estacional, concluyendose que la serie no tiene presencia estacional.
+
+#Dado que no existe evidencia de estacionalidad se procede a realizar el 
+#modelado mediante ARIMA
+
+###################### modelo ARIMA  #################################
+
+#Seleccion de los ordenes del modelo ARIMA q
+#Función de autocorrelación simple
+ACF<-Acf(ts_dif_newdeaths, lag.max=52, plot = F) %>% 
+  autoplot()+
+  labs(title= 'Funcion de correlación simple',
+       subtitle = 'Serie de tiempo fallecimientos semanales por Covid-19 en
+       México con 1ra diferencia I(1)',
+       y=expression(rho),
+       x='k')+
+  scale_x_continuous(breaks = seq(0,52,1))
+
+# q = 1,12
+
+#Seleccion de los ordenes del modelo ARIMA q
+#Función de autocorrelación parcial
+
+PACF<-Pacf(ts_dif_newdeaths, lag.max=52, plot = F) %>% 
+  autoplot()+
+  labs(title= 'Funcion de correlación parcial',
+       subtitle = 'Serie de tiempo fallecimientos semanales por Covid-19 en 
+       México con 1ra diferencia I(1)',
+       y=expression(rho),
+       x='k')+
+  scale_x_continuous(breaks = seq(0,52,1))
+
+# p = 2,4
+
+ACF_PACF <- grid.arrange(ACF, PACF)
+plot(ACF_PACF)
+
+
+# Al realizar las combinaciones entre ordenes tenemos los siguientes modelos:
+# ARIMA  p,d,q
+# ARIMA (2,1,1)
+# ARIMA (4,1,1)
+
+
+# Proceso de estimación ----
+
+# d= orden de integración 
+# p= orden de la parte autorregresiva AR(p)
+# q= orden de la parte de medias móviles MA(q)
+
+mod1 <- stats::arima(ts_dif_newdeaths, order = c(2,1,1),
+                     method = 'ML')
+mod2 <- stats::arima(ts_dif_newdeaths, order = c(4,1,1),
+                     method = 'ML')
+
+
+# Bondad de ajuste o selección el modelo optimo 
+
+## Sustraer el AIC (Criterio de información Akaike)
+
+AIC <- c(mod1$aic, mod2$aic)
+## Calcular el término de error cuadrático medio RMSE 
+
+RMSE1 <- rmse(ts_dif_newdeaths, fitted.values(mod1))
+RMSE2 <- rmse(ts_dif_newdeaths, fitted.values(mod2))
+
+
+RMSE <- c(RMSE1, RMSE2)
+
+## Construir un vector de nombres de los modelos 
+
+Modelos <- c("Modelo 1: ARIMA (2,1,1)",
+             "Modelo 2: ARIMA (4,1,1)")
+
+## Constuir tabla de bondad de ajuste
+
+Tabla_modelos <- data.frame(Modelos, AIC, RMSE)
+print(Tabla_modelos)
+
+##############################
+# Nota: Se selecciono el modelo 4, ya que cuenta con el menor AIC y RMSE
+
+# Evaluación del modelo -----
+
+library(lmtest)
+
+## Revisión general 
+
+summary(mod4)
+
+## Significancia individual 
+
+coeftest(mod4)
+
+## Raices o soluciones del modelo 
+
+autoplot(mod4)+
+  labs(title = 'Gráfico del circula unitario',
+       subtitle = 'Soluciones del modelo ARIMA (2,1,3)')
+
+## Valores reales vs estimados 
+
+fit <- fitted.values(mod4)
+
+G1 <- ggplot(data=ts_dif_newdeaths,
+             aes(x=time(ts_dif_newdeaths),
+                 y=ts_dif_newdeaths, colour='Barriles'))+
+  geom_line(size=1)+
+  geom_line(data=fit,
+            aes(y=fit, colour='Estimado'),
+            size=1)+
+  scale_x_continuous(breaks = seq(2005,2022,1))+
+  scale_colour_manual(values=c('steelblue','red'))+
+  labs(title = 'Gráfico de valores reales vs estimados',
+       subtitle = 'Modelo 4: ARIMA (2,1,3)',
+       x='Fecha',
+       y='Barriles',
+       colour='Series')
+plot(G1)
+
+## Pruebas estadísticas del modelo 
+
+### Correlación 
+
+res_mod4 <- residuals(mod4)
+
+## Prueba de Box-Pierce y Ljung-Box
+
+log10(207) # Rezagos optimos para realizar pruebas de autocorrelación
+
+Box.test(res_mod4, lag=2, type='Ljung-Box')
+
+Box.test(res_mod4, lag=24, type='Ljung-Box')
+
+qchisq(0.05, df=24, lower.tail = F)
+
+Box.test(res_mod4, lag=2, type= 'Box-Pierce')
+
+Box.test(res_mod4, lag=24, type= 'Box-Pierce')
+
+
+# Nota: No hay correlación serial, ya que p-value es mayor que 0.05
+# a un nivel de confianza del 5%, se obtiene el error tipo II. 
+
+## Función de autocorrelación simple 
+
+Acf(res_mod4, lag.max=24, plot=F) %>% 
+  autoplot()+
+  scale_x_continuous(breaks = seq(1,24,1))+
+  labs(title = 'ACF de los residuales',
+       x=expression(k),
+       y=expression(rho))
+
+## Prueba alternativa que junta Box-Pierce, histograma y ACF 
+
+checkresiduals(mod4)
+
+## Heterocedasticidad 
+
+### Prueba ARCH 
+
+library(aTSA)
+
+arch.test(mod4)
+
+### Residuales al cuadrado con ACF 
+
+Acf(res_mod4^2, lag.max=24, plot=F) %>% 
+  autoplot()+
+  scale_x_continuous(breaks = seq(1,24,1))+
+  labs(title = 'ACF de los residuales al cuadrado',
+       x=expression(k),
+       y=expression(rho))
+
+Box.test(res_mod4^2, lag=24, type='Ljung-Box')
+
+## Normalidad de residuales
+
+jarque.bera.test(res_mod4)
+shapiro.test(res_mod4)
+
+## Analizar la estacionariedad 
+
+tseries::adf.test(res_mod4)
+tseries::pp.test(res_mod4)
+tseries::kpss.test(res_mod4)
+
+# Pronostico ----
+
+fcast <- forecast::forecast(mod4, h=5, level=95)
+print(fcast)
+
+autoplot(fcast, include = 25)
 
 
 
