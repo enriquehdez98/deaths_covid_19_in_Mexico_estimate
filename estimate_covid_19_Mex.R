@@ -408,7 +408,7 @@ ACF<-Acf(ts_dif_newdeaths, lag.max=52, plot = F) %>%
        x='k')+
   scale_x_continuous(breaks = seq(0,52,1))
 
-# q = 1,12
+# q = 1
 
 #Seleccion de los ordenes del modelo ARIMA q
 #Función de autocorrelación parcial
@@ -440,29 +440,40 @@ plot(ACF_PACF)
 # p= orden de la parte autorregresiva AR(p)
 # q= orden de la parte de medias móviles MA(q)
 
-mod1 <- stats::arima(ts_dif_newdeaths, order = c(2,1,1),
+mod1 <- stats::arima(ts_dif_newdeaths, order = c(2,1,0),
                      method = 'ML')
 mod2 <- stats::arima(ts_dif_newdeaths, order = c(4,1,1),
                      method = 'ML')
+mod_a <- auto.arima(ts_dif_newdeaths,d = 1,trace=TRUE)
+
+# Posterior al analisis de significancia individual de los coeficientes del mod2
+# se propone silenciar las varibles sin significancia indivifual
+
+mod2_s <- stats::arima(ts_dif_newdeaths, order=c(4,1,1),
+                       fixed = c(0,NA,0,NA,NA))
 
 
 # Bondad de ajuste o selección el modelo optimo 
 
 ## Sustraer el AIC (Criterio de información Akaike)
 
-AIC <- c(mod1$aic, mod2$aic)
+AIC <- c(mod1$aic, mod2$aic, mod2_s$aic, mod_a$aic)
 ## Calcular el término de error cuadrático medio RMSE 
 
 RMSE1 <- rmse(ts_dif_newdeaths, fitted.values(mod1))
 RMSE2 <- rmse(ts_dif_newdeaths, fitted.values(mod2))
+RMSE2s <- rmse(ts_dif_newdeaths, fitted.values(mod2_s))
+RMSEa <- rmse(ts_dif_newdeaths, fitted.values(mod_a))
 
 
-RMSE <- c(RMSE1, RMSE2)
+RMSE <- c(RMSE1, RMSE2,RMSE2s,RMSEa)
 
 ## Construir un vector de nombres de los modelos 
 
 Modelos <- c("Modelo 1: ARIMA (2,1,1)",
-             "Modelo 2: ARIMA (4,1,1)")
+             "Modelo 2: ARIMA (4,1,1)",
+             "Modelo 2: ARIMA (4,1,1)s",
+             "Modelo A: ARIMA (2,1,0)")
 
 ## Constuir tabla de bondad de ajuste
 
@@ -478,21 +489,23 @@ library(lmtest)
 
 ## Revisión general 
 
-summary(mod4)
+summary(mod2)
 
 ## Significancia individual 
 
-coeftest(mod4)
+coeftest(mod_a)
+
+
 
 ## Raices o soluciones del modelo 
 
-autoplot(mod4)+
+autoplot(mod2)+
   labs(title = 'Gráfico del circula unitario',
-       subtitle = 'Soluciones del modelo ARIMA (2,1,3)')
+       subtitle = 'Soluciones del modelo ARIMA (4,1,1)')
 
 ## Valores reales vs estimados 
 
-fit <- fitted.values(mod4)
+fit <- fitted.values(mod2)
 
 G1 <- ggplot(data=ts_dif_newdeaths,
              aes(x=time(ts_dif_newdeaths),
@@ -504,7 +517,7 @@ G1 <- ggplot(data=ts_dif_newdeaths,
   scale_x_continuous(breaks = seq(2005,2022,1))+
   scale_colour_manual(values=c('steelblue','red'))+
   labs(title = 'Gráfico de valores reales vs estimados',
-       subtitle = 'Modelo 4: ARIMA (2,1,3)',
+       subtitle = 'Modelo 2: ARIMA (4,1,1)',
        x='Fecha',
        y='Barriles',
        colour='Series')
@@ -514,13 +527,13 @@ plot(G1)
 
 ### Correlación 
 
-res_mod4 <- residuals(mod4)
+res_mod2 <- residuals(mod2)
 
 ## Prueba de Box-Pierce y Ljung-Box
 
-log10(207) # Rezagos optimos para realizar pruebas de autocorrelación
+log10(124) # Rezagos optimos para realizar pruebas de autocorrelación
 
-Box.test(res_mod4, lag=2, type='Ljung-Box')
+Box.test(res_mod2, lag=2, type='Ljung-Box')
 
 Box.test(res_mod4, lag=24, type='Ljung-Box')
 
@@ -579,11 +592,38 @@ tseries::kpss.test(res_mod4)
 
 # Pronostico ----
 
-fcast <- forecast::forecast(mod4, h=5, level=95)
+fcast <- forecast::forecast(mod_a, h=5, level=95)
 print(fcast)
 
-autoplot(fcast, include = 25)
+autoplot(fcast)
 
+fit <- fitted.values(mod_a)
 
+Estimados_real <- cumsum(c(ts_newdeaths[1], fit))
+Estimados_real <- ts(Estimados_real,c(2020,1), frequency = 52 )
+
+library(scales)
+
+ggplot(data=ts_newdeaths, aes(x=time(ts_newdeaths), y=ts_newdeaths, 
+                              colour='Real new deaths'))+
+  geom_line()+
+  geom_line(data=Estimados_real, aes(x=time(Estimados_real),
+                                y=Estimados_real,
+                                colour='Estimados new deaths'))+
+  scale_x_continuous(breaks = seq(2005,2021,1))+
+  scale_y_continuous(labels=comma)+
+  scale_colour_manual(values=c("red", "steelblue"))+
+  labs(title = "Datos reales vs estimados",
+       subtitle = "COVID-19 Mexico",
+       x='Fecha',
+       y='Valores',
+       colour='Series')+
+  theme(plot.title = element_text(face='bold',
+                                  size=16,
+                                  hjust=0.5),
+        plot.subtitle = element_text(size=14,
+                                     hjust=0.5),
+        plot.caption = element_text(face='italic',
+                                    size=12))
 
 
