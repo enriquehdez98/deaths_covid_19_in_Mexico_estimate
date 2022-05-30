@@ -16,6 +16,7 @@ library(urca)
 library(uroot)
 library(gridExtra)
 library(Metrics)
+library(scales)
 
 
 ##install.packages("forecast",dependency=TRUE)
@@ -440,39 +441,40 @@ plot(ACF_PACF)
 # p= orden de la parte autorregresiva AR(p)
 # q= orden de la parte de medias móviles MA(q)
 
-mod1 <- stats::arima(ts_dif_newdeaths, order = c(2,1,0),
+mod1 <- stats::arima(ts_dif_newdeaths, order = c(2,1,1),
                      method = 'ML')
 mod2 <- stats::arima(ts_dif_newdeaths, order = c(4,1,1),
                      method = 'ML')
-mod_a <- auto.arima(ts_dif_newdeaths,d = 1,trace=TRUE)
-
 # Posterior al analisis de significancia individual de los coeficientes del mod2
 # se propone silenciar las varibles sin significancia indivifual
 
 mod2_s <- stats::arima(ts_dif_newdeaths, order=c(4,1,1),
                        fixed = c(0,NA,0,NA,NA))
 
+mod3 <- stats::arima(ts_dif_newdeaths,order = c(2,1,0))
+
+
 
 # Bondad de ajuste o selección el modelo optimo 
 
 ## Sustraer el AIC (Criterio de información Akaike)
 
-AIC <- c(mod1$aic, mod2$aic, mod2_s$aic, mod_a$aic)
+AIC <- c(mod1$aic, mod2$aic, mod2_s$aic, mod3$aic)
 ## Calcular el término de error cuadrático medio RMSE 
 
 RMSE1 <- rmse(ts_dif_newdeaths, fitted.values(mod1))
 RMSE2 <- rmse(ts_dif_newdeaths, fitted.values(mod2))
 RMSE2s <- rmse(ts_dif_newdeaths, fitted.values(mod2_s))
-RMSEa <- rmse(ts_dif_newdeaths, fitted.values(mod_a))
+RMSE3 <- rmse(ts_dif_newdeaths, fitted.values(mod3))
 
 
-RMSE <- c(RMSE1, RMSE2,RMSE2s,RMSEa)
+RMSE <- c(RMSE1, RMSE2,RMSE2s,RMSE3)
 
 ## Construir un vector de nombres de los modelos 
 
 Modelos <- c("Modelo 1: ARIMA (2,1,1)",
              "Modelo 2: ARIMA (4,1,1)",
-             "Modelo 2: ARIMA (4,1,1)s",
+             "Modelo 2s: ARIMA (4,1,1)s",
              "Modelo A: ARIMA (2,1,0)")
 
 ## Constuir tabla de bondad de ajuste
@@ -489,23 +491,23 @@ library(lmtest)
 
 ## Revisión general 
 
-summary(mod2)
+best_model <- mod2_s
+
+summary(best_model)
 
 ## Significancia individual 
 
-coeftest(mod_a)
-
-
+coeftest(best_model)
 
 ## Raices o soluciones del modelo 
 
-autoplot(mod2)+
+autoplot(best_model)+
   labs(title = 'Gráfico del circula unitario',
        subtitle = 'Soluciones del modelo ARIMA (4,1,1)')
 
 ## Valores reales vs estimados 
 
-fit <- fitted.values(mod2)
+fit <- fitted.values(best_model)
 
 G1 <- ggplot(data=ts_dif_newdeaths,
              aes(x=time(ts_dif_newdeaths),
@@ -527,21 +529,17 @@ plot(G1)
 
 ### Correlación 
 
-res_mod2 <- residuals(mod2)
+res_best_model <- residuals(best_model)
 
 ## Prueba de Box-Pierce y Ljung-Box
 
 log10(124) # Rezagos optimos para realizar pruebas de autocorrelación
 
-Box.test(res_mod2, lag=2, type='Ljung-Box')
-
-Box.test(res_mod4, lag=24, type='Ljung-Box')
+Box.test(res_best_model, lag=2, type='Ljung-Box')
 
 qchisq(0.05, df=24, lower.tail = F)
 
-Box.test(res_mod4, lag=2, type= 'Box-Pierce')
-
-Box.test(res_mod4, lag=24, type= 'Box-Pierce')
+Box.test(res_best_model, lag=2, type= 'Box-Pierce')
 
 
 # Nota: No hay correlación serial, ya que p-value es mayor que 0.05
@@ -549,7 +547,7 @@ Box.test(res_mod4, lag=24, type= 'Box-Pierce')
 
 ## Función de autocorrelación simple 
 
-Acf(res_mod4, lag.max=24, plot=F) %>% 
+Acf(res_best_model, lag.max=24, plot=F) %>% 
   autoplot()+
   scale_x_continuous(breaks = seq(1,24,1))+
   labs(title = 'ACF de los residuales',
@@ -558,7 +556,7 @@ Acf(res_mod4, lag.max=24, plot=F) %>%
 
 ## Prueba alternativa que junta Box-Pierce, histograma y ACF 
 
-checkresiduals(mod4)
+checkresiduals(best_model)
 
 ## Heterocedasticidad 
 
@@ -566,50 +564,82 @@ checkresiduals(mod4)
 
 library(aTSA)
 
-arch.test(mod4)
+arch.test(rbest_model)
 
 ### Residuales al cuadrado con ACF 
 
-Acf(res_mod4^2, lag.max=24, plot=F) %>% 
+Acf(res_best_model^2, lag.max=24, plot=F) %>% 
   autoplot()+
   scale_x_continuous(breaks = seq(1,24,1))+
   labs(title = 'ACF de los residuales al cuadrado',
        x=expression(k),
        y=expression(rho))
 
-Box.test(res_mod4^2, lag=24, type='Ljung-Box')
+Box.test(res_mod3^2, lag=24, type='Ljung-Box')
 
 ## Normalidad de residuales
 
-jarque.bera.test(res_mod4)
-shapiro.test(res_mod4)
+jarque.bera.test(res_best_model)
+shapiro.test(res_best_model)
 
 ## Analizar la estacionariedad 
 
-tseries::adf.test(res_mod4)
-tseries::pp.test(res_mod4)
-tseries::kpss.test(res_mod4)
+tseries::adf.test(res_best_model)
+tseries::pp.test(res_best_model)
+tseries::kpss.test(res_best_model)
 
 # Pronostico ----
 
-fcast <- forecast::forecast(mod_a, h=5, level=95)
+fcast <- forecast::forecast(best_model, h=5, level=95)
 print(fcast)
 
 autoplot(fcast)
 
-fit <- fitted.values(mod_a)
+fit <- fitted.values(best_model)
 
 Estimados_real <- cumsum(c(ts_newdeaths[1], fit))
 Estimados_real <- ts(Estimados_real,c(2020,1), frequency = 52 )
 
-library(scales)
+Estimados_rea_for=c(1:125)
+Estimados_rea_for[1]=0
 
-ggplot(data=ts_newdeaths, aes(x=time(ts_newdeaths), y=ts_newdeaths, 
-                              colour='Real new deaths'))+
-  geom_line()+
+for (i in c(2:125)) {
+  Estimados_rea_for[i] <- fit[i]+ts_newdeaths[i-1]
+}
+
+Estimados_rea_for <- ts(Estimados_rea_for,c(2020,2), frequency = 52 )
+
+######### plot for #########
+ggplot()+
+  geom_line(data=ts_newdeaths, aes(x=time(ts_newdeaths), y=ts_newdeaths, 
+                                   colour='Real new deaths'),size=0.8)+
+  geom_line(data=Estimados_rea_for, aes(x=time(Estimados_rea_for),
+                                y=Estimados_rea_for,
+                                colour='Estimados new deaths'),size=0.8)+
+  scale_x_continuous(breaks = seq(2005,2021,1))+
+  scale_y_continuous(labels=comma)+
+  scale_colour_manual(values=c("red", "steelblue"))+
+  labs(title = "Datos reales vs estimados",
+       subtitle = "COVID-19 Mexico",
+       x='Fecha',
+       y='Valores',
+       colour='Series')+
+  theme(plot.title = element_text(face='bold',
+                                  size=16,
+                                  hjust=0.5),
+        plot.subtitle = element_text(size=14,
+                                     hjust=0.5),
+        plot.caption = element_text(face='italic',
+                                    size=12))
+
+######### plot cumsum #########
+ggplot()+
+  geom_line(data=ts_newdeaths, aes(x=time(ts_newdeaths), y=ts_newdeaths, 
+                                   colour='Real new deaths'),size=0.8)+
   geom_line(data=Estimados_real, aes(x=time(Estimados_real),
-                                y=Estimados_real,
-                                colour='Estimados new deaths'))+
+                                        y=Estimados_real,
+                                        colour='Estimados new deaths')
+            ,size=0.8)+
   scale_x_continuous(breaks = seq(2005,2021,1))+
   scale_y_continuous(labels=comma)+
   scale_colour_manual(values=c("red", "steelblue"))+
@@ -627,3 +657,40 @@ ggplot(data=ts_newdeaths, aes(x=time(ts_newdeaths), y=ts_newdeaths,
                                     size=12))
 
 
+Estimado_arima <- c(1:6)
+Estimado_arima[1] <- ts_newdeaths[126]
+Estimado_arima[2:6] <- cumsum(fcast$mean)+Estimados_rea_for[125]
+Estimado_arima=Estimado_arima <-ts(data=Estimado_arima,
+                     start = c(2022,22), end=c(2022,27),
+                     frequency = 52)
+Estimado_up<-c(1,5)
+Estimado_down<-c(1,5)
+
+for (i in c(1:5)) {
+  Estimado_up[i]<-fcast$upper[i]+Estimado_arima[i+1]
+  print(Estimado_up[i])
+  Estimado_down[i]<-fcast$lower[i]-Estimado_arima[i+1]
+}
+
+Estimado_up=Estimado_up <-ts(data=Estimado_up,
+                                   start = c(2022,23), end=c(2022,27),
+                                   frequency = 52)
+Estimado_down=Estimado_down <-ts(data=Estimado_down,
+                             start = c(2022,23), end=c(2022,27),
+                             frequency = 52)
+
+
+ggplot()+
+  geom_line(data=ts_newdeaths, aes(x=time(ts_newdeaths), y=ts_newdeaths, 
+                                   colour='Real new deaths'),size=0.8)+
+  geom_line(data=Estimado_arima,aes(x=time(Estimado_arima),y=Estimado_arima,
+                                     colour='Estimados mean new deaths'),size=0.8)+
+  geom_ribbon(aes(x=time(Estimado_down), ymin=Estimado_down, 
+                  ymax=Estimado_up,fill = "IC 95%"), alpha = 0.3)+
+  scale_colour_manual(values=c("blue","red"))+
+  scale_fill_manual("",values="grey12")
+  labs(title = "Datos reales vs estimados",
+       subtitle = "COVID-19 Mexico",
+       x='Fecha',
+       y='Valores',
+       colour='Series')
