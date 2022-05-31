@@ -1,5 +1,3 @@
-## Tarea 3: modelos lineales de predicción MCO
-
 library(tidyverse)
 library(lubridate)
 library(quantmod)
@@ -30,6 +28,7 @@ data <- data[data$location=="Mexico",]
 
 #Filtrando datos de interes:
 covid_mx <- select(data, date, new_deaths)
+covid_mx <- covid_mx[1:880,] ## Limita la fecha hasta el día 30/may/22
 #date =columna de fecha desde 01/01/2020 hasta hoy con frecuencia diaria
 #new_deaths = número de muerte diarias por covid-19 en México
 #new_cases  =  número de casos positivos nuevos de covid-19 en México
@@ -86,11 +85,11 @@ ggplot(data=covid_week, aes(x=date  , y=new_deaths))+
   scale_x_date(date_breaks = "6 month",
                date_labels = " %m-%Y")+
   scale_y_continuous(breaks = seq(min(covid_week$new_deaths),
-                                 max(covid_week$new_deaths),(1000)))+
+                                 max(covid_week$new_deaths),(100)))+
   geom_area(alpha=0.6)+
   theme_minimal()+
   labs(title="Nuevos fallecimentos semanales por COVID-19",
-       subtitle = "del 2020 al 2022 en Mexico",
+       subtitle = "en Mexico del años 2020 al 2022",
        caption = "Elaboración propia con con datos de Our World in Data COVID-19",
        x="Fecha",
        y="Número de fallecimientos")
@@ -106,7 +105,7 @@ covid_anio<-covid_week %>%
             
 covid_anio
 
-li### Estadisticos por mes
+### Estadisticos por mes
 covid_mensual<-covid_week %>% 
   group_by(mes_tex) %>% 
   summarise(min_anual=min(new_deaths),
@@ -118,35 +117,13 @@ covid_mensual
 
 
 #box plot
-covid_week %>% 
-  filter(anio==2020) %>% 
-  ggplot(aes(x=mes_tex, y=new_deaths))+
-  geom_boxplot(fill="steelblue", color="black",
+##covid_week %>% 
+  ggplot()+
+  geom_boxplot(data=covid_week,aes(x=fct_relevel(mes_tex,"ene.","feb.","mar.","abr.","may.","jun.","jul.","ago.","sep.","oct.","nov.","dic."), y=new_deaths), fill="steelblue", color="black",
                outlier.colour = "red")+
   theme_minimal()+
-  labs(title = "Gráfico de caja y bigotes fallecimientos semanales por covid en México para el año 2020",
-       caption = "Elaboración propia con con datos de Our World in Data COVID-19",
-       x="Fecha",
-       y="Número de fallecimientos")
-
-covid_week %>% 
-  filter(anio==2021) %>% 
-  ggplot(aes(x=mes_tex, y=new_deaths))+
-  geom_boxplot(fill="steelblue", color="black",
-               outlier.colour = "red")+
-  theme_minimal()+
-  labs(title = "Gráfico de caja y bigotes fallecimientos semanales por covid en México para el año 2021",
-       caption = "Elaboración propia con con datos de Our World in Data COVID-19",
-       x="Fecha",
-       y="Número de fallecimientos")
-
-covid_week %>% 
-  filter(anio==2022) %>% 
-  ggplot(aes(x=mes_tex, y=new_deaths))+
-  geom_boxplot(fill="steelblue", color="black",
-               outlier.colour = "red")+
-  theme_minimal()+
-  labs(title = "Gráfico de caja y bigotes fallecimientos semanales por covid en México para el año 2022",
+  labs(title = "Box-plot fallecimientos semanales por COVID-19",
+       subtitle = "en Mexico del años 2020 al 2022",
        caption = "Elaboración propia con con datos de Our World in Data COVID-19",
        x="Fecha",
        y="Número de fallecimientos")
@@ -158,7 +135,8 @@ covid_week %>%
   geom_boxplot(fill="steelblue", color="black",
                outlier.colour = "red")+
   theme_minimal()+
-  labs(title = "Gráfico de caja y bigotes fallecimientos semanales por covid en México para el año 2022",
+  labs(title = "Box-plot fallecimientos semanales por COVID-19",
+       subtitle = "en Mexico del años 2020 al 2022",
        caption = "Elaboración propia con con datos de Our World in Data COVID-19",
        x="Fecha",
        y="Número de fallecimientos")
@@ -181,34 +159,38 @@ ggplot(covid_week, aes(new_deaths))+
              color="brown", linetype="dashed")+
   geom_vline(xintercept = mfv(covid_week$new_deaths),
              color="steelblue", linetype="dashed")+
-  labs(title = "Histograma muertes semanales por Covid-19 en México",
+  labs(title = "Histograma fallecimientos semanales \npor Covid-19 del 2020 al 2022 en México",
+       
        x="Clases",
        y="Frecuencia")
+
 
 ## Q-Q plot
 ggplot(covid_week, aes(sample=new_deaths))+
   stat_qq(color="#2E86C1")+
   stat_qq_line(color="#C0392B", size=0.7)+
   theme_minimal()+
-  labs(title = "Gráfico Q-Q fallecimientos semanales por Covid-19 en México")
-
-
-
-## Conviertiendo los datos en series de tiempo  
-ts_newdeaths<-ts(data=covid_week$new_deaths,
-                start = c(2020,1),
-                frequency = 52)
+  labs(title = "Gráfico Q-Q fallecimientos semanales \npor Covid-19 del 2020 al 2022 en México")
 
 
 
 ## Aplicación de una prueba jarque-bera 
 
-jarque.bera.test(covid_week$new_deaths) 
+jarque.bera.test(covid_week$new_deaths)
+
+# Dado el p-valor del estadistico jarque-bera, y en contraste con
+# un valor de significacia del 0.05, hay evidencia para rechazar
+# H0=distribución normal, por lo que se asume que la serie de tiempo no
+# sigue una distribución normal
 
 ## NOTA: La serie de tiempo naturalmente
 ## no presentará una distribución normal
 
-adf.test(covid_week$new_deaths)
+
+## Conviertiendo los datos en series de tiempo  
+ts_newdeaths<-ts(data=covid_week$new_deaths,
+                 start = c(2020,1),
+                 frequency = 52)
 
 
 #Descomposición temporal
@@ -220,23 +202,27 @@ plot(des_new_deaths)
 # Analsis de la estacionariedad serie de tiempo a niveles I(0):
 #1. Funciones de autocorrelación simple.
 
-Acf(ts_newdeaths, lag.max=50, plot = F) %>% 
+ACF<-Acf(ts_newdeaths, lag.max=50, plot = F) %>% 
   autoplot()+
-  labs(title= 'Funcion de correlación simple',
-       subtitle = 'Serie de tiempo fallecimientos semanales por Covid-19 en México a niveles I(0)',
+  labs(title="A)",
+       subtitle = 'Función de correlación simple fallecimientos semanales\npor Covid-19 en México a niveles I(0)',
        y=expression(rho),
        x='k')+
-  scale_x_continuous(breaks = seq(0,50,1))
+  scale_x_continuous(breaks = seq(0,50,5))
 #1.1 Funciones de autocorrelación parcial
 
-Pacf(ts_newdeaths, lag.max=156, plot = F) %>% 
+PACF<-Pacf(ts_newdeaths, lag.max=156, plot = F) %>% 
   autoplot()+
-  labs(title= 'Funcion de correlación parcial',
-       subtitle = 'Serie de tiempo fallecimientos semanales por Covid-19 en México a niveles I(0)',
+  labs(title="B)",
+       subtitle = 'Función de correlación parcial fallecimientos semanales\npor Covid-19 en México a niveles I(0)',
        y=expression(rho),
        x='k')+
   scale_x_continuous(breaks = seq(0,156,52))
   
+ACF_PACF <- grid.arrange(ACF, PACF)
+plot(ACF_PACF)
+
+
 #2. Prueba de Dickey-Fuller Aumentada.
 
 adf.test(ts_newdeaths)
@@ -278,10 +264,8 @@ ggplot(data=dif_newdeaths, aes(x=date, y=ts_dif_newdeaths))+
   geom_line(colour="black")+
   scale_x_date(date_breaks = "6 month",
                date_labels = " %m-%Y")+
-  scale_y_continuous(breaks = seq(min(covid_week$new_deaths),
-                                  max(covid_week$new_deaths),(1000)))+
   theme_minimal()+
-  labs(title="Nuevos fallecimentos semanales por COVID-19 del 2020 al 2022 en Mexico",
+  labs(title="Nuevos fallecimentos semanales por COVID-19\ndel 2020 al 2022 en México",
        subtitle = "Serie de tiempo con primera diferencia I(1)",
        caption = "Elaboración propia con con datos de Our World in Data COVID-19",
        x="Fecha",
@@ -291,13 +275,13 @@ ggplot(data=dif_newdeaths, aes(x=date, y=ts_dif_newdeaths))+
 # Analsis de la estacionariedad serie de tiempo en primer diferencia I(1):
 #1. Funciones de autocorrelación simple.
 
-Acf(ts_dif_newdeaths, lag.max=50, plot = F) %>% 
+ACF<-Acf(ts_dif_newdeaths, lag.max=50, plot = F) %>% 
   autoplot()+
-  labs(title= 'Funcion de correlación simple',
-       subtitle = 'Serie de tiempo fallecimientos semanales por Covid-19 en México a niveles I(0)',
+  labs(title= 'A)',
+       subtitle = 'Función de correlación simple fallecimientos semanales\npor Covid-19 en México I(1)',
        y=expression(rho),
        x='k')+
-  scale_x_continuous(breaks = seq(0,50,1))
+  scale_x_continuous(breaks = seq(0,50,5))
 
 # Se sospecha de estacionariedad ya que existe un caida exponencial en los  
 # primeros retardos. Sin embargo, es necesario aplicar las pruebas de estacio-
@@ -305,13 +289,17 @@ Acf(ts_dif_newdeaths, lag.max=50, plot = F) %>%
 
 #1.1 Funciones de autocorrelación parcial
 
-Pacf(ts_dif_newdeaths, lag.max=156, plot = F) %>% 
+PACF<-Pacf(ts_dif_newdeaths, lag.max=156, plot = F) %>% 
   autoplot()+
-  labs(title= 'Funcion de correlación parcial',
-       subtitle = 'Serie de tiempo fallecimientos semanales por Covid-19 en México a niveles I(0)',
+  labs(title= 'B)',
+       subtitle = 'Función de correlación simple fallecimientos semanales\npor Covid-19 en México I(1)',
        y=expression(rho),
        x='k')+
   scale_x_continuous(breaks = seq(0,156,52))
+
+ACF_PACF <- grid.arrange(ACF, PACF)
+plot(ACF_PACF)
+
 
 # Se sospecha de estacionalidad ya que existe una concordancia en el signo de
 # rho para los retardos 1,52 y 104. Sin embargo, es necesario aplicar la 
@@ -354,13 +342,12 @@ kpss.test(ts_dif_newdeaths, null = "Level")
 ggseasonplot(ts_newdeaths, year.labels = TRUE,
              year.labels.left = TRUE,
              main='Analisis de estacionalidad nuevos fallecimientos COVID-19 
-             en México \nElaboración propia con datos de Our World in 
-             Data COVID-19')
+             en México')
+
 ggseasonplot(ts_dif_newdeaths, year.labels = TRUE,
              year.labels.left = TRUE,
-             main='Analisis de estacionalidad nuevos fallecimientos COVID-19 
-             en México \nElaboración propia con datos de Our World in 
-             Data COVID-19')
+             main='Analisis de estacionalidad nuevos fallecimientos
+             por COVID-19 en México')
 
 
 #En el grafico se aprecia que el año 2020 no tiene la misma temporalidad 
@@ -390,7 +377,7 @@ DFS <- lm(covid_s~covid_t4[1:74])
 summary(DFS)
 #Dado que el p-valor del phi estimado es 2x10^-16 y constrastado con un valor
 #de significia del 0.05, existe evidencia suficiente para rechazar H0, es decir
-#que el valor de phi es != 0. y por lo tanto no hay precencia de raiz no 
+#que el valor de phi es != 0. y por lo tanto no hay presencia de raiz no 
 #estacional, concluyendose que la serie no tiene presencia estacional.
 
 #Dado que no existe evidencia de estacionalidad se procede a realizar el 
@@ -441,17 +428,11 @@ plot(ACF_PACF)
 # p= orden de la parte autorregresiva AR(p)
 # q= orden de la parte de medias móviles MA(q)
 
-mod1 <- stats::arima(ts_dif_newdeaths, order = c(2,1,1),
+mod1 <- stats::arima(ts_newdeaths, order = c(2,1,1),
                      method = 'ML')
-mod2 <- stats::arima(ts_dif_newdeaths, order = c(4,1,1),
+mod2 <- stats::arima(ts_newdeaths, order = c(4,1,1),
                      method = 'ML')
-# Posterior al analisis de significancia individual de los coeficientes del mod2
-# se propone silenciar las varibles sin significancia indivifual
-
-mod2_s <- stats::arima(ts_dif_newdeaths, order=c(4,1,1),
-                       fixed = c(0,NA,0,NA,NA))
-
-mod3 <- stats::arima(ts_dif_newdeaths,order = c(2,1,0))
+mod3 <- stats::arima(ts_newdeaths,order = c(2,1,0))
 
 
 
@@ -459,22 +440,20 @@ mod3 <- stats::arima(ts_dif_newdeaths,order = c(2,1,0))
 
 ## Sustraer el AIC (Criterio de información Akaike)
 
-AIC <- c(mod1$aic, mod2$aic, mod2_s$aic, mod3$aic)
+AIC <- c(mod1$aic, mod2$aic, mod3$aic)
 ## Calcular el término de error cuadrático medio RMSE 
 
-RMSE1 <- rmse(ts_dif_newdeaths, fitted.values(mod1))
-RMSE2 <- rmse(ts_dif_newdeaths, fitted.values(mod2))
-RMSE2s <- rmse(ts_dif_newdeaths, fitted.values(mod2_s))
-RMSE3 <- rmse(ts_dif_newdeaths, fitted.values(mod3))
+RMSE1 <- rmse(ts_newdeaths, fitted.values(mod1))
+RMSE2 <- rmse(ts_newdeaths, fitted.values(mod2))
+RMSE3 <- rmse(ts_newdeaths, fitted.values(mod3))
 
 
-RMSE <- c(RMSE1, RMSE2,RMSE2s,RMSE3)
+RMSE <- c(RMSE1, RMSE2,RMSE3)
 
 ## Construir un vector de nombres de los modelos 
 
 Modelos <- c("Modelo 1: ARIMA (2,1,1)",
              "Modelo 2: ARIMA (4,1,1)",
-             "Modelo 2s: ARIMA (4,1,1)s",
              "Modelo A: ARIMA (2,1,0)")
 
 ## Constuir tabla de bondad de ajuste
@@ -491,9 +470,11 @@ library(lmtest)
 
 ## Revisión general 
 
-best_model <- mod2_s
+best_model <- mod2
 
 summary(best_model)
+
+#################### Evaluacion del modelo ##############
 
 ## Significancia individual 
 
@@ -505,45 +486,53 @@ autoplot(best_model)+
   labs(title = 'Gráfico del circula unitario',
        subtitle = 'Soluciones del modelo ARIMA (4,1,1)')
 
-## Valores reales vs estimados 
+#Dado que la raices de los polinomios se encuentran dentro
+#del circulo unitario del plano Z,por lo que se puede asumir
+#que el sistema se comporta de manera estable
+
+## Valores reales vs estimados (en diferencia) 
 
 fit <- fitted.values(best_model)
 
-G1 <- ggplot(data=ts_dif_newdeaths,
-             aes(x=time(ts_dif_newdeaths),
-                 y=ts_dif_newdeaths, colour='Barriles'))+
-  geom_line(size=1)+
+G1 <- ggplot(data=ts_newdeaths,
+             aes(x=time(ts_newdeaths),
+                 y=ts_newdeaths, colour='Fallecimientos reales'))+
+  geom_line(size=0.8)+
   geom_line(data=fit,
-            aes(y=fit, colour='Estimado'),
-            size=1)+
+            aes(y=fit, colour='Estimación ARIMA(4,1,1)'),
+            size=0.8)+
   scale_x_continuous(breaks = seq(2005,2022,1))+
   scale_colour_manual(values=c('steelblue','red'))+
-  labs(title = 'Gráfico de valores reales vs estimados',
-       subtitle = 'Modelo 2: ARIMA (4,1,1)',
+  labs(title = 'Fallecimientos semanales por COVID-19 reales vs estimados',
+       subtitle = 'en México del 2020 al 2022',
        x='Fecha',
-       y='Barriles',
+       y='Falleciminetos semanales',
        colour='Series')
 plot(G1)
 
 ## Pruebas estadísticas del modelo 
 
-### Correlación 
+### Pruebas de auto-correlación 
 
 res_best_model <- residuals(best_model)
 
-## Prueba de Box-Pierce y Ljung-Box
-
 log10(124) # Rezagos optimos para realizar pruebas de autocorrelación
 
+# Test Ljung-Box
 Box.test(res_best_model, lag=2, type='Ljung-Box')
 
-qchisq(0.05, df=24, lower.tail = F)
+#Dado que el p-valor del Test Ljung-Box es 0.9734 y constrastado con un valor
+#de significia del 0.05, no existe evidencia suficiente para rechazar H0, 
+#es decir que no existe correlación serial en los residuos
+
+## Prueba de Box-Pierce 
 
 Box.test(res_best_model, lag=2, type= 'Box-Pierce')
 
+#Dado que el p-valor del Test Box-Pierce es 0.9742 y constrastado con un valor
+#de significia del 0.05,no existe evidencia suficiente para rechazar H0, 
+#es decir que no existe correlación serial en los residuos
 
-# Nota: No hay correlación serial, ya que p-value es mayor que 0.05
-# a un nivel de confianza del 5%, se obtiene el error tipo II. 
 
 ## Función de autocorrelación simple 
 
@@ -554,9 +543,11 @@ Acf(res_best_model, lag.max=24, plot=F) %>%
        x=expression(k),
        y=expression(rho))
 
-## Prueba alternativa que junta Box-Pierce, histograma y ACF 
+# A pesar de que el grafico ACF muestras los resagos 12 y 13 fuera
+# del intervalo de confianza, los estadisticos Box-Pierce y Ljung-Box, indican
+# ausencia de autocorrelación en los rezagos, de tal modo que se
+# asume que los residulos de modelo no presentan autocorrelacion serial
 
-checkresiduals(best_model)
 
 ## Heterocedasticidad 
 
@@ -564,18 +555,18 @@ checkresiduals(best_model)
 
 library(aTSA)
 
-arch.test(rbest_model)
+arch.test(best_model)
 
 ### Residuales al cuadrado con ACF 
 
 Acf(res_best_model^2, lag.max=24, plot=F) %>% 
   autoplot()+
-  scale_x_continuous(breaks = seq(1,24,1))+
+  scale_x_continuous(breaks = seq(1,24,3))+
   labs(title = 'ACF de los residuales al cuadrado',
        x=expression(k),
        y=expression(rho))
 
-Box.test(res_mod3^2, lag=24, type='Ljung-Box')
+Box.test(res_best_model^2, lag=24, type='Ljung-Box')
 
 ## Normalidad de residuales
 
@@ -588,6 +579,13 @@ tseries::adf.test(res_best_model)
 tseries::pp.test(res_best_model)
 tseries::kpss.test(res_best_model)
 
+#Los residuos se comporta de manera estacionaria, ay que los estadisitcos
+#ADF y PP rechazan la H0 de no estacionariedad, mientras que el test KPSS
+#no hay suficiente evidencia para rechazar H0 de estacionariedad.
+#De modo que aunque no existe normalidad en los residuos, si existe 
+#estacionariedad en los datos, es decir, se cumple el supuesto que
+#media = cte, varianza= cte y cov proxima a cero
+
 # Pronostico ----
 
 fcast <- forecast::forecast(best_model, h=5, level=95)
@@ -595,83 +593,15 @@ print(fcast)
 
 autoplot(fcast)
 
-fit <- fitted.values(best_model)
-
-Estimados_real <- cumsum(c(ts_newdeaths[1], fit))
-Estimados_real <- ts(Estimados_real,c(2020,1), frequency = 52 )
-
-Estimados_rea_for=c(1:125)
-Estimados_rea_for[1]=0
-
-for (i in c(2:125)) {
-  Estimados_rea_for[i] <- fit[i]+ts_newdeaths[i-1]
-}
-
-Estimados_rea_for <- ts(Estimados_rea_for,c(2020,2), frequency = 52 )
-
-######### plot for #########
-ggplot()+
-  geom_line(data=ts_newdeaths, aes(x=time(ts_newdeaths), y=ts_newdeaths, 
-                                   colour='Real new deaths'),size=0.8)+
-  geom_line(data=Estimados_rea_for, aes(x=time(Estimados_rea_for),
-                                y=Estimados_rea_for,
-                                colour='Estimados new deaths'),size=0.8)+
-  scale_x_continuous(breaks = seq(2005,2021,1))+
-  scale_y_continuous(labels=comma)+
-  scale_colour_manual(values=c("red", "steelblue"))+
-  labs(title = "Datos reales vs estimados",
-       subtitle = "COVID-19 Mexico",
-       x='Fecha',
-       y='Valores',
-       colour='Series')+
-  theme(plot.title = element_text(face='bold',
-                                  size=16,
-                                  hjust=0.5),
-        plot.subtitle = element_text(size=14,
-                                     hjust=0.5),
-        plot.caption = element_text(face='italic',
-                                    size=12))
-
-######### plot cumsum #########
-ggplot()+
-  geom_line(data=ts_newdeaths, aes(x=time(ts_newdeaths), y=ts_newdeaths, 
-                                   colour='Real new deaths'),size=0.8)+
-  geom_line(data=Estimados_real, aes(x=time(Estimados_real),
-                                        y=Estimados_real,
-                                        colour='Estimados new deaths')
-            ,size=0.8)+
-  scale_x_continuous(breaks = seq(2005,2021,1))+
-  scale_y_continuous(labels=comma)+
-  scale_colour_manual(values=c("red", "steelblue"))+
-  labs(title = "Datos reales vs estimados",
-       subtitle = "COVID-19 Mexico",
-       x='Fecha',
-       y='Valores',
-       colour='Series')+
-  theme(plot.title = element_text(face='bold',
-                                  size=16,
-                                  hjust=0.5),
-        plot.subtitle = element_text(size=14,
-                                     hjust=0.5),
-        plot.caption = element_text(face='italic',
-                                    size=12))
-
-
 Estimado_arima <- c(1:6)
 Estimado_arima[1] <- ts_newdeaths[126]
-Estimado_arima[2:6] <- cumsum(fcast$mean)+Estimados_rea_for[125]
+Estimado_arima[2:6] <- (fcast$mean)
 Estimado_arima=Estimado_arima <-ts(data=Estimado_arima,
                      start = c(2022,22), end=c(2022,27),
                      frequency = 52)
-Estimado_up<-c(1,5)
-Estimado_down<-c(1,5)
 
-for (i in c(1:5)) {
-  Estimado_up[i]<-fcast$upper[i]+Estimado_arima[i+1]
-  print(Estimado_up[i])
-  Estimado_down[i]<-fcast$lower[i]-Estimado_arima[i+1]
-}
-
+Estimado_up<- (fcast$upper)
+Estimado_down<- (fcast$lower)
 Estimado_up=Estimado_up <-ts(data=Estimado_up,
                                    start = c(2022,23), end=c(2022,27),
                                    frequency = 52)
@@ -682,15 +612,16 @@ Estimado_down=Estimado_down <-ts(data=Estimado_down,
 
 ggplot()+
   geom_line(data=ts_newdeaths, aes(x=time(ts_newdeaths), y=ts_newdeaths, 
-                                   colour='Real new deaths'),size=0.8)+
+                                   colour='Fallecimientos historicos'),size=0.8)+
   geom_line(data=Estimado_arima,aes(x=time(Estimado_arima),y=Estimado_arima,
-                                     colour='Estimados mean new deaths'),size=0.8)+
+                                     colour='Pronostico ARIMA(4,1,1)'),size=0.8)+
   geom_ribbon(aes(x=time(Estimado_down), ymin=Estimado_down, 
-                  ymax=Estimado_up,fill = "IC 95%"), alpha = 0.3)+
-  scale_colour_manual(values=c("blue","red"))+
-  scale_fill_manual("",values="grey12")
-  labs(title = "Datos reales vs estimados",
-       subtitle = "COVID-19 Mexico",
+                  ymax=Estimado_up,fill = "Intervalo de confianza \nal 95%"), alpha = 0.3)+
+  scale_y_continuous(breaks = seq(min(covid_week$new_deaths),
+                                  max(covid_week$new_deaths),(100)))+
+  scale_colour_manual(values=c('steelblue','red'))+
+  scale_fill_manual("",values="grey12")+
+  labs(title = "Forecasting fallecimientos semanales por COVID-19 en México",
        x='Fecha',
-       y='Valores',
+       y='Fallecimientos',
        colour='Series')
