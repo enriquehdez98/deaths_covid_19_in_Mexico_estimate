@@ -17,7 +17,7 @@ library(Metrics)
 library(scales)
 
 
-##install.packages("forecast",dependency=TRUE)
+#install.packages("forecast",dependency=TRUE)
 
 #Descargando la data sobre covid mundial
 data <- read_csv("https://covid.ourworldindata.org/data/owid-covid-data.csv")
@@ -34,7 +34,7 @@ covid_mx <- covid_mx[1:880,] ## Limita la fecha hasta el día 30/may/22
 #new_cases  =  número de casos positivos nuevos de covid-19 en México
 #people_vaccinated =número de personas vacunas con al menos una dosis o más 
 # contra el covid
-view(covid_mx)
+View(covid_mx)
 
 #Limpiando valores nulos
 
@@ -68,8 +68,12 @@ covid_week <- covid_mx %>%
   group_by(week) %>%
   summarise(new_deaths=round(mean(new_deaths)))
 
+# OPCIONAL
+# date_sistema = as.Date(Sys.Date())
+date_sistema = as.Date(("2022-05-30"))
+
 covid_week <- covid_week %>%
-  mutate(date=seq(as.Date(covid_mx$date[1]),as.Date(Sys.Date()),by="week"))
+  mutate(date=seq(as.Date(covid_mx$date[1]),date_sistema,by="week"))
 
 ## Identificadores de año y mes
 
@@ -590,38 +594,37 @@ tseries::kpss.test(res_best_model)
 
 fcast <- forecast::forecast(best_model, h=5, level=95)
 print(fcast)
-
 autoplot(fcast)
 
-Estimado_arima <- c(1:6)
+# Coreccion #
+# Ajustar acumulación de diferencias
+Estimado_arima <- numeric(6)
 Estimado_arima[1] <- ts_newdeaths[126]
-Estimado_arima[2:6] <- (fcast$mean)
-Estimado_arima=Estimado_arima <-ts(data=Estimado_arima,
-                     start = c(2022,22), end=c(2022,27),
-                     frequency = 52)
+Estimado_arima[2:6] <- Estimado_arima[1] + cumsum(fcast$mean)
+Estimado_arima <- ts(data = Estimado_arima, start = c(2022, 22), frequency = 52)
 
-Estimado_up<- (fcast$upper)
-Estimado_down<- (fcast$lower)
-Estimado_up=Estimado_up <-ts(data=Estimado_up,
-                                   start = c(2022,23), end=c(2022,27),
-                                   frequency = 52)
-Estimado_down=Estimado_down <-ts(data=Estimado_down,
-                             start = c(2022,23), end=c(2022,27),
-                             frequency = 52)
+# Intervalos de confianza
+Estimado_up <- c(NA, fcast$upper[, 1])
+Estimado_down <- c(NA, fcast$lower[, 1])
+Estimado_up <- ts(data = Estimado_up, start = c(2022, 22), frequency = 52)
+Estimado_down <- ts(data = Estimado_down, start = c(2022, 22), frequency = 52)
+
+# Gráfico con ggplot2
+library(ggplot2)
+ggplot() +
+  geom_line(aes(x = time(ts_newdeaths), y = ts_newdeaths, colour = 'Fallecimientos históricos'), size = 0.8) +
+  geom_line(aes(x = time(Estimado_arima), y = Estimado_arima, colour = 'Pronóstico ARIMA(2,1,1)'), size = 0.8) +
+  geom_ribbon(aes(x = time(Estimado_down), ymin = Estimado_down, ymax = Estimado_up, fill = "Intervalo de confianza \nal 95%"), alpha = 0.3) +
+  scale_y_continuous(breaks = seq(0, max(covid_week$new_deaths, na.rm = TRUE), by = 100)) +
+  scale_colour_manual(values = c('steelblue', 'red')) +
+  scale_fill_manual("", values = "grey12") +
+  labs(
+    title = "Pronóstico de fallecimientos semanales por COVID-19 en México",
+    x = "Fecha",
+    y = "Número de fallecimientos",
+    colour = "Series"
+  )
 
 
-ggplot()+
-  geom_line(data=ts_newdeaths, aes(x=time(ts_newdeaths), y=ts_newdeaths, 
-                                   colour='Fallecimientos historicos'),size=0.8)+
-  geom_line(data=Estimado_arima,aes(x=time(Estimado_arima),y=Estimado_arima,
-                                     colour='Pronostico ARIMA(4,1,1)'),size=0.8)+
-  geom_ribbon(aes(x=time(Estimado_down), ymin=Estimado_down, 
-                  ymax=Estimado_up,fill = "Intervalo de confianza \nal 95%"), alpha = 0.3)+
-  scale_y_continuous(breaks = seq(min(covid_week$new_deaths),
-                                  max(covid_week$new_deaths),(100)))+
-  scale_colour_manual(values=c('steelblue','red'))+
-  scale_fill_manual("",values="grey12")+
-  labs(title = "Forecasting fallecimientos semanales por COVID-19 en México",
-       x='Fecha',
-       y='Fallecimientos',
-       colour='Series')
+# ## ## #
+
